@@ -16,7 +16,9 @@ import {
   SortableContext,
 } from "@dnd-kit/sortable";
 
-import { useState } from "react";
+import { MouseSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
+
+import { useState, useEffect, useRef } from "react";
 import {
   DndContext,
   useDroppable,
@@ -36,11 +38,75 @@ const tabItems: tabItemObj[] = [
   { id: 9, name: "Help", image: HelpImg, isPinned: false },
   { id: 10, name: "Auswahllisten", image: ListIng, isPinned: false },
   { id: 11, name: "Rechn", image: BrowserImg, isPinned: false },
+  { id: 12, name: "Administration", image: SettingImg, isPinned: false },
+  { id: 13, name: "Help", image: HelpImg, isPinned: false },
+  { id: 14, name: "Auswahllisten", image: ListIng, isPinned: false },
+  { id: 15, name: "Rechn", image: BrowserImg, isPinned: false },
+  { id: 16, name: "Administration", image: SettingImg, isPinned: false },
+  { id: 17, name: "Help", image: HelpImg, isPinned: false },
+  { id: 18, name: "Auswahllisten", image: ListIng, isPinned: false },
+  { id: 19, name: "Rechn", image: BrowserImg, isPinned: false },
 ];
 
 const TabsNavigation: React.FC = () => {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
-  const [items, setItems] = useState(tabItems);
+  const [items, setItems] = useState<tabItemObj[]>(() => {
+    const savedItems = localStorage.getItem("tabItems");
+    if (savedItems) {
+      return JSON.parse(savedItems);
+    }
+    return tabItems;
+  });
+  const [dropdownItems, setDropdownItems] = useState<tabItemObj[]>([]);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+
+  useEffect(() => {
+    localStorage.setItem("tabItems", JSON.stringify(items));
+  }, [items]);
+
+  useEffect(() => {
+    const savedItems = localStorage.getItem("tabItems");
+    if (savedItems) {
+      setItems(JSON.parse(savedItems));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      setContainerWidth(containerRef.current.clientWidth);
+    }
+  }, [items]);
+
+  useEffect(() => {
+    if (containerRef.current) {
+      const containerWidth = containerRef.current.clientWidth;
+      console.log(containerWidth);
+      let totalWidth = 0;
+      const visibleItems: tabItemObj[] = [];
+      const hiddenItems: tabItemObj[] = [];
+
+      items.forEach((item) => {
+        totalWidth += 100; // Припустимо, що ширина кожного елемента 100px
+        if (totalWidth > containerWidth) {
+          hiddenItems.push(item);
+        } else {
+          visibleItems.push(item);
+        }
+      });
+      setDropdownItems(hiddenItems);
+      setIsDropdownOpen(hiddenItems.length > 0);
+    }
+  }, [items, containerWidth]);
+
+  const mouseSensor = useSensor(MouseSensor, {
+    activationConstraint: { distance: 5 },
+  });
+  const touchSensor = useSensor(TouchSensor, {
+    activationConstraint: { delay: 2000, tolerance: 5 },
+  });
+  const sensors = useSensors(mouseSensor, touchSensor);
 
   const handleClick = (index: number) => {
     setActiveIndex(index);
@@ -52,44 +118,53 @@ const TabsNavigation: React.FC = () => {
 
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-    console.log(event);
-    console.log("Active:", active);
-    console.log("Over:", over);
-
-    if (!over) {
-      console.log("No valid drop target detected.");
-      return;
-    }
+    if (!over) return;
 
     const activeId = toNumber(active.id);
     const overId = toNumber(over.id);
 
-    if (activeId === overId) return; // Ensure we're not moving to the same spot
+    const activeItem = items.find((item) => item.id === activeId);
+    const overItem = items.find((item) => item.id === overId);
+
+    if (activeItem?.isPinned || overItem?.isPinned) return;
+    if (activeId === overId) return;
 
     const oldIndex = items.findIndex((item) => item.id === activeId);
     const newIndex = items.findIndex((item) => item.id === overId);
 
-    if (oldIndex === -1 || newIndex === -1) return; // Ensure indexes are valid
-
+    if (oldIndex === -1 || newIndex === -1) return;
     const updatedItems = [...items];
     const [movedItem] = updatedItems.splice(oldIndex, 1);
     updatedItems.splice(newIndex, 0, movedItem);
-
     setItems(updatedItems);
   };
 
-  const { setNodeRef } = useDroppable({
-    id: "droppable-container", // Unique ID for the droppable area
-  });
+  const togglePin = (id: number) => {
+    setItems((prevItems) => {
+      const updatedItems = prevItems.map((item) =>
+        item.id === id ? { ...item, isPinned: !item.isPinned } : item
+      );
+      return updatedItems;
+    });
+  };
+
+  const { setNodeRef } = useDroppable({ id: "droppable-container" });
 
   return (
-    <div className="grid grid-cols-[90px_1fr] grid-rows-[70px_50px_1fr] h-screen w-full">
+    <div className="grid grid-cols-[90px_1fr] grid-rows-[70px_50px_1fr] h-screen w-screen">
       <div className="col-span-1 row-span-3 bg-white"></div>
       <div className="col-span-1 row-span-1 bg-white border-solid border-l-[1px] border-b-[1px] border-[#AEB6CE33]"></div>
-      <DndContext collisionDetection={closestCorners} onDragEnd={handleDragEnd}>
+      <DndContext
+        collisionDetection={closestCorners}
+        onDragEnd={handleDragEnd}
+        sensors={sensors}
+      >
         <div
-          ref={setNodeRef}
-          className="col-span-1 row-span-1 flex bg-white border-2 border-solid border-gray-400"
+          ref={(node) => {
+            setNodeRef(node);
+            containerRef.current = node;
+          }}
+          className="col-span-1 row-span-1 flex bg-white border-2 border-solid border-gray-400 relative w-screen"
         >
           <SortableContext
             items={items}
@@ -108,9 +183,25 @@ const TabsNavigation: React.FC = () => {
                 }
                 handleClick={() => handleClick(index)}
                 isPinned={item.isPinned}
+                togglePin={() => togglePin(item.id)}
               />
             ))}
           </SortableContext>
+          <button
+            className="absolute bottom-0 right-20 w-[100px] z-10 bg-blue-400"
+            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+          >
+            Open Dropdown
+          </button>
+          {isDropdownOpen && (
+            <div className="absolute top-full right-0 mr-20 bg-white border border-gray-300 shadow-lg rounded-md ">
+              {dropdownItems.map((item) => (
+                <div key={item.id} className="p-2 hover:bg-gray-100">
+                  {item.name}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </DndContext>
       <div className="col-span-1 row-span-1 bg-white m-4"></div>

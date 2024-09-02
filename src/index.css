@@ -3,5 +3,6 @@
 @tailwind utilities;
 
 body {
-  background-color: #9e9d9d9a; /* Задайте будь-який бажаний колір */
+  background-color: #9e9d9d9a;
+  overflow: hidden;
 }
